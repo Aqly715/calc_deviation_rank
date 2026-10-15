@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Калькулятор ранга + тепловая карта</title>
+<style>
+  body {
+    font-family: Arial, sans-serif;
+    background: #0f0f23;
+    color: #eee;
+    display: flex;
+    justify-content: center;
+    padding: 40px;
+  }
+  .card {
+    background: #1a1a2e;
+    padding: 30px;
+    border-radius: 16px;
+    width: 560px;
+    box-shadow: 0 0 25px rgba(0,0,0,0.6);
+  }
+  h2 { text-align: center; color: #ffd700; margin-bottom: 25px; }
+  .parent {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 12px 0;
+  }
+  .parent label { width: 110px; }
+  input {
+    width: 55px;
+    padding: 6px;
+    border-radius: 6px;
+    border: none;
+    text-align: center;
+    font-size: 16px;
+  }
+  button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 20px;
+    background: #ffd700;
+    color: #1a1a2e;
+    font-weight: bold;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 16px;
+  }
+  button:hover { background: #ffea70; }
+
+  #mainResult {
+    margin-top: 25px;
+    text-align: center;
+    font-size: 22px;
+    font-weight: bold;
+    min-height: 40px;
+  }
+  #mainResult span { color: #4bff6a; }
+
+  .section-title {
+    margin-top: 25px;
+    font-size: 14px;
+    color: #aaa;
+    text-align: center;
+  }
+
+  .heatmap-wrap {
+    margin-top: 15px;
+    display: flex;
+    justify-content: center;
+  }
+  .heatmap {
+    display: grid;
+    grid-template-columns: 40px repeat(5, 70px);
+    grid-template-rows: 30px repeat(5, 60px);
+    gap: 4px;
+  }
+  .axis-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: #ffd700;
+    font-weight: bold;
+  }
+  .cell {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: bold;
+    color: #111;
+    transition: transform .15s;
+    cursor: default;
+  }
+  .cell.zero {
+    opacity: 0.4;
+  }
+  .cell:hover { transform: scale(1.08); z-index: 2; }
+  .cell .pct { font-size: 15px; }
+  .cell .rank { font-size: 11px; opacity: 0.75; }
+
+  .legend {
+    margin-top: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #aaa;
+  }
+  .legend-bar {
+    width: 150px;
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(90deg, #1a1a3e, #2d4ea0, #ffd700, #4bff6a);
+  }
+
+  .note {
+    margin-top: 10px;
+    font-size: 11px;
+    color: #777;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>🧬 Ранг девианта </h2>
+
+  <div class="parent">
+    <label>Девиант 1:</label>
+    <input type="number" id="a1" min="1" max="5" value="5"> /
+    <input type="number" id="b1" min="1" max="5" value="4">
+  </div>
+
+  <div class="parent">
+    <label>Девиант 2:</label>
+    <input type="number" id="a2" min="1" max="5" value="4"> /
+    <input type="number" id="b2" min="1" max="5" value="5">
+  </div>
+
+  <button onclick="calculate()">Рассчитать</button>
+
+  <div id="mainResult"></div>
+
+  <div class="section-title">Тепловая карта всех исходов (строка — 1-я характеристика, столбец — 2-я)</div>
+  <div class="heatmap-wrap">
+    <div class="heatmap" id="heatmap"></div>
+  </div>
+
+  <div class="legend">
+    Низкий шанс <div class="legend-bar"></div> Высокий шанс
+  </div>
+</div>
+
+<script>
+const DISPLAY_THRESHOLD = 10.1; // в процентах
+
+function clamp(v) {
+  return Math.max(1, Math.min(5, v));
+}
+
+function statDistribution(v1, v2) {
+  const diff = Math.abs(v1 - v2);
+  const mutationChance = Math.max(0, 0.5 - diff * 0.1);
+  const half = mutationChance / 2;
+  const stay = 1 - mutationChance;
+
+  const dist = {1:0, 2:0, 3:0, 4:0, 5:0};
+
+  function addContribution(v, caseProb) {
+    const plusVal = clamp(v + 1);
+    const minusVal = clamp(v - 1);
+    dist[plusVal]  += caseProb * half;
+    dist[minusVal] += caseProb * half;
+    dist[v]        += caseProb * stay;
+  }
+
+  addContribution(v1, 0.5);
+  addContribution(v2, 0.5);
+
+  return dist;
+}
+
+function probColor(prob, maxProb) {
+  const t = maxProb > 0 ? prob / maxProb : 0;
+  const stops = [
+    {t: 0.0, c: [26, 26, 62]},
+    {t: 0.4, c: [45, 78, 160]},
+    {t: 0.7, c: [255, 215, 0]},
+    {t: 1.0, c: [75, 255, 106]}
+  ];
+  let c1 = stops[0], c2 = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i].t && t <= stops[i+1].t) {
+      c1 = stops[i]; c2 = stops[i+1];
+      break;
+    }
+  }
+  const localT = (t - c1.t) / (c2.t - c1.t || 1);
+  const r = Math.round(c1.c[0] + (c2.c[0] - c1.c[0]) * localT);
+  const g = Math.round(c1.c[1] + (c2.c[1] - c1.c[1]) * localT);
+  const b = Math.round(c1.c[2] + (c2.c[2] - c1.c[2]) * localT);
+  return `rgb(${r},${g},${b})`;
+}
+
+// Отображаемый процент с учётом порога
+function displayPct(prob) {
+  const pct = prob * 100;
+  return pct < DISPLAY_THRESHOLD ? 0 : pct;
+}
+
+function calculate() {
+  const a1 = parseInt(document.getElementById('a1').value);
+  const b1 = parseInt(document.getElementById('b1').value);
+  const a2 = parseInt(document.getElementById('a2').value);
+  const b2 = parseInt(document.getElementById('b2').value);
+
+  const distStat1 = statDistribution(a1, a2);
+  const distStat2 = statDistribution(b1, b2);
+
+  const combos = [];
+  for (let x = 1; x <= 5; x++) {
+    for (let y = 1; y <= 5; y++) {
+      const prob = distStat1[x] * distStat2[y];
+      combos.push({ x, y, rank: `${x}/${y}`, prob, sum: x + y });
+    }
+  }
+
+  // --- Главный результат: только исходы с реальным (не обнулённым) шансом ---
+  const validCandidates = combos.filter(c => (c.prob * 100) >= DISPLAY_THRESHOLD);
+  const bestRankAmongTop = validCandidates.length > 0
+    ? [...validCandidates].sort((a, b) => b.sum - a.sum || b.prob - a.prob)[0]
+    : [...combos].sort((a, b) => b.prob - a.prob)[0]; // fallback, если вообще все < порога
+
+  const shownPct = displayPct(bestRankAmongTop.prob);
+  document.getElementById('mainResult').innerHTML =
+    `${a1}/${b1} + ${a2}/${b2} = <span>${bestRankAmongTop.rank}</span> с ${shownPct.toFixed(1)}% шансом`;
+
+  // --- Тепловая карта ---
+  const maxProb = Math.max(...combos.map(c => c.prob));
+  const heatmap = document.getElementById('heatmap');
+  heatmap.innerHTML = '';
+
+  heatmap.appendChild(makeAxisCell(''));
+  for (let y = 1; y <= 5; y++) {
+    heatmap.appendChild(makeAxisCell(`②=${y}`));
+  }
+
+  for (let x = 1; x <= 5; x++) {
+    heatmap.appendChild(makeAxisCell(`①=${x}`));
+    for (let y = 1; y <= 5; y++) {
+      const combo = combos.find(c => c.x === x && c.y === y);
+      const pctShown = displayPct(combo.prob);
+      const cell = document.createElement('div');
+      cell.className = 'cell' + (pctShown === 0 ? ' zero' : '');
+      cell.style.background = probColor(combo.prob, maxProb);
+      cell.innerHTML = `
+        <div class="pct">${pctShown.toFixed(1)}%</div>
+        <div class="rank">${combo.rank}</div>
+      `;
+      heatmap.appendChild(cell);
+    }
+  }
+}
+
+function makeAxisCell(text) {
+  const el = document.createElement('div');
+  el.className = 'axis-label';
+  el.textContent = text;
+  return el;
+}
+
+calculate();
+</script>
+</body>
+</html>
