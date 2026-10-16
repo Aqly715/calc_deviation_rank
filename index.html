@@ -96,9 +96,13 @@
     color: #111;
     transition: transform .15s;
     cursor: default;
+    box-sizing: border-box;
   }
   .cell.zero {
     opacity: 0.4;
+  }
+  .cell.best {
+    border: 3px solid #fff;
   }
   .cell:hover { transform: scale(1.08); z-index: 2; }
   .cell .pct { font-size: 15px; }
@@ -130,18 +134,18 @@
 </head>
 <body>
 <div class="card">
-  <h2>🧬 Ранг девианта </h2>
+  <h2>🧬 Ранг потомка </h2>
 
   <div class="parent">
     <label>Девиант 1:</label>
-    <input type="number" id="a1" min="1" max="5" value="3"> /
-    <input type="number" id="b1" min="1" max="5" value="3">
+    <input type="number" id="a1" min="1" max="5" value="5"> /
+    <input type="number" id="b1" min="1" max="5" value="4">
   </div>
 
   <div class="parent">
     <label>Девиант 2:</label>
-    <input type="number" id="a2" min="1" max="5" value="3"> /
-    <input type="number" id="b2" min="1" max="5" value="3">
+    <input type="number" id="a2" min="1" max="5" value="4"> /
+    <input type="number" id="b2" min="1" max="5" value="5">
   </div>
 
   <button onclick="calculate()">Рассчитать</button>
@@ -159,7 +163,7 @@
 </div>
 
 <script>
-const DISPLAY_THRESHOLD = 9; 
+const DISPLAY_THRESHOLD = 10.1;
 
 function clamp(v) {
   return Math.max(1, Math.min(5, v));
@@ -209,7 +213,6 @@ function probColor(prob, maxProb) {
   return `rgb(${r},${g},${b})`;
 }
 
-// Отображаемый процент с учётом порога
 function displayPct(prob) {
   const pct = prob * 100;
   return pct < DISPLAY_THRESHOLD ? 0 : pct;
@@ -228,15 +231,12 @@ function calculate() {
   for (let x = 1; x <= 5; x++) {
     for (let y = 1; y <= 5; y++) {
       const prob = distStat1[x] * distStat2[y];
-      // Расстояние до идеального угла 5/5 (чем меньше — тем лучше)
       const distance = Math.sqrt(Math.pow(5 - x, 2) + Math.pow(5 - y, 2));
       combos.push({ x, y, rank: `${x}/${y}`, prob, distance });
     }
   }
 
-  // --- Главный результат: ближайший к правому нижнему углу среди значимых исходов ---
   const validCandidates = combos.filter(c => (c.prob * 100) >= DISPLAY_THRESHOLD);
-
   const pool = validCandidates.length > 0 ? validCandidates : combos;
   const bestRankAmongTop = [...pool].sort((a, b) =>
     a.distance - b.distance || b.prob - a.prob
@@ -246,7 +246,6 @@ function calculate() {
   document.getElementById('mainResult').innerHTML =
     `${a1}/${b1} + ${a2}/${b2} = <span>${bestRankAmongTop.rank}</span> с ${shownPct.toFixed(1)}% шансом`;
 
-  // --- Тепловая карта (без изменений) ---
   const maxProb = Math.max(...combos.map(c => c.prob));
   const heatmap = document.getElementById('heatmap');
   heatmap.innerHTML = '';
@@ -261,45 +260,9 @@ function calculate() {
     for (let y = 1; y <= 5; y++) {
       const combo = combos.find(c => c.x === x && c.y === y);
       const pctShown = displayPct(combo.prob);
+      const isBest = (combo.x === bestRankAmongTop.x && combo.y === bestRankAmongTop.y);
       const cell = document.createElement('div');
-      cell.className = 'cell' + (pctShown === 0 ? ' zero' : '');
-      cell.style.background = probColor(combo.prob, maxProb);
-      cell.innerHTML = `
-        <div class="pct">${pctShown.toFixed(1)}%</div>
-        <div class="rank">${combo.rank}</div>
-      `;
-      heatmap.appendChild(cell);
-    }
-  }
-}
-
-  // --- Главный результат: только исходы с реальным (не обнулённым) шансом ---
-  const validCandidates = combos.filter(c => (c.prob * 100) >= DISPLAY_THRESHOLD);
-  const bestRankAmongTop = validCandidates.length > 0
-    ? [...validCandidates].sort((a, b) => b.sum - a.sum || b.prob - a.prob)[0]
-    : [...combos].sort((a, b) => b.prob - a.prob)[0]; // fallback, если вообще все < порога
-
-  const shownPct = displayPct(bestRankAmongTop.prob);
-  document.getElementById('mainResult').innerHTML =
-    `Лучший вероятный исход: <span>${bestRankAmongTop.rank}</span> с ${shownPct.toFixed(1)}% шансом`;
-
-  // --- Тепловая карта ---
-  const maxProb = Math.max(...combos.map(c => c.prob));
-  const heatmap = document.getElementById('heatmap');
-  heatmap.innerHTML = '';
-
-  heatmap.appendChild(makeAxisCell(''));
-  for (let y = 1; y <= 5; y++) {
-    heatmap.appendChild(makeAxisCell(`②=${y}`));
-  }
-
-  for (let x = 1; x <= 5; x++) {
-    heatmap.appendChild(makeAxisCell(`①=${x}`));
-    for (let y = 1; y <= 5; y++) {
-      const combo = combos.find(c => c.x === x && c.y === y);
-      const pctShown = displayPct(combo.prob);
-      const cell = document.createElement('div');
-      cell.className = 'cell' + (pctShown === 0 ? ' zero' : '');
+      cell.className = 'cell' + (pctShown === 0 ? ' zero' : '') + (isBest ? ' best' : '');
       cell.style.background = probColor(combo.prob, maxProb);
       cell.innerHTML = `
         <div class="pct">${pctShown.toFixed(1)}%</div>
