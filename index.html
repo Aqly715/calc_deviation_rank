@@ -240,7 +240,7 @@ function calculate() {
 
   const shownPct = displayPct(bestRankAmongTop.prob);
   document.getElementById('mainResult').innerHTML =
-    `${a1}/${b1} + ${a2}/${b2} = <span>${bestRankAmongTop.rank}</span> с ${shownPct.toFixed(1)}% шансом`;
+    `Лучший вероятный исход: <span>${bestRankAmongTop.rank}</span> с ${shownPct.toFixed(1)}% шансом`;
 
   // --- Тепловая карта ---
   const maxProb = Math.max(...combos.map(c => c.prob));
