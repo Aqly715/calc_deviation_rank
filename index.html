@@ -228,9 +228,50 @@ function calculate() {
   for (let x = 1; x <= 5; x++) {
     for (let y = 1; y <= 5; y++) {
       const prob = distStat1[x] * distStat2[y];
-      combos.push({ x, y, rank: `${x}/${y}`, prob, sum: x + y });
+      // Расстояние до идеального угла 5/5 (чем меньше — тем лучше)
+      const distance = Math.sqrt(Math.pow(5 - x, 2) + Math.pow(5 - y, 2));
+      combos.push({ x, y, rank: `${x}/${y}`, prob, distance });
     }
   }
+
+  // --- Главный результат: ближайший к правому нижнему углу среди значимых исходов ---
+  const validCandidates = combos.filter(c => (c.prob * 100) >= DISPLAY_THRESHOLD);
+
+  const pool = validCandidates.length > 0 ? validCandidates : combos;
+  const bestRankAmongTop = [...pool].sort((a, b) =>
+    a.distance - b.distance || b.prob - a.prob
+  )[0];
+
+  const shownPct = displayPct(bestRankAmongTop.prob);
+  document.getElementById('mainResult').innerHTML =
+    `${a1}/${b1} + ${a2}/${b2} = <span>${bestRankAmongTop.rank}</span> с ${shownPct.toFixed(1)}% шансом`;
+
+  // --- Тепловая карта (без изменений) ---
+  const maxProb = Math.max(...combos.map(c => c.prob));
+  const heatmap = document.getElementById('heatmap');
+  heatmap.innerHTML = '';
+
+  heatmap.appendChild(makeAxisCell(''));
+  for (let y = 1; y <= 5; y++) {
+    heatmap.appendChild(makeAxisCell(`②=${y}`));
+  }
+
+  for (let x = 1; x <= 5; x++) {
+    heatmap.appendChild(makeAxisCell(`①=${x}`));
+    for (let y = 1; y <= 5; y++) {
+      const combo = combos.find(c => c.x === x && c.y === y);
+      const pctShown = displayPct(combo.prob);
+      const cell = document.createElement('div');
+      cell.className = 'cell' + (pctShown === 0 ? ' zero' : '');
+      cell.style.background = probColor(combo.prob, maxProb);
+      cell.innerHTML = `
+        <div class="pct">${pctShown.toFixed(1)}%</div>
+        <div class="rank">${combo.rank}</div>
+      `;
+      heatmap.appendChild(cell);
+    }
+  }
+}
 
   // --- Главный результат: только исходы с реальным (не обнулённым) шансом ---
   const validCandidates = combos.filter(c => (c.prob * 100) >= DISPLAY_THRESHOLD);
